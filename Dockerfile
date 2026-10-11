@@ -11,19 +11,43 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# ── Stage 2: Runtime ─────────────────────────────────────────────────
+# ── Stage 2: Model artifacts ─────────────────────────────────────────
+# Generates the synthetic data and trains and evaluates the models (make data,
+# make train, make evaluate), so the image builds from a fresh checkout
+FROM python:3.11-slim AS artifacts
+
+WORKDIR /app
+
+# XGBoost and LightGBM load the OpenMP runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+COPY src/ src/
+RUN python -m src.data.generate_data && \
+    python -m src.features.feature_engineering && \
+    python -m src.models.train && \
+    python -m src.models.evaluate
+
+# ── Stage 3: Runtime ─────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
+# XGBoost and LightGBM load the OpenMP runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application source
+# Copy application source and the trained artifacts
 COPY src/ src/
-COPY models/ models/
-COPY results/ results/
-COPY data/processed/ data/processed/
+COPY --from=artifacts /app/models/ models/
+COPY --from=artifacts /app/results/ results/
+COPY --from=artifacts /app/data/processed/ data/processed/
 
 # Non-root user for security
 RUN groupadd --gid 1000 appuser && \
