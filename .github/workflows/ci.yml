@@ -19,9 +19,8 @@ jobs:
     name: Python
     uses: Naresh1401/github-cicd-workflows/.github/workflows/python-ci.yml@v1
 
-  container:
-    name: Docker image
-    uses: Naresh1401/github-cicd-workflows/.github/workflows/container.yml@v1
+  # No image build here: the Dockerfile copies the processed data, trained models and
+  # results that `make data` and `make train` create locally, and those aren't committed.
 
   repo-lint:
     name: Repository lint
